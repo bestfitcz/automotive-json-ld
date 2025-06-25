@@ -1,12 +1,12 @@
 <?php
 
-namespace VendorName\Skeleton\Commands;
+namespace Bestfitcz\AutomotiveJsonLd\Commands;
 
 use Illuminate\Console\Command;
 
-class SkeletonCommand extends Command
+class AutomotiveJsonLdCommand extends Command
 {
-    public $signature = 'skeleton';
+    public $signature = 'automotive-json-ld';
 
     public $description = 'My command';
 

@@ -1,22 +1,22 @@
 {
-    "name": ":vendor_slug/:package_slug",
-    "description": ":package_description",
+    "name": "bestfitcz/automotive-json-ld",
+    "description": "Package to help to generate json-ld",
     "keywords": [
-        ":vendor_name",
+        "bestfitcz",
         "laravel",
-        ":package_slug"
+        "automotive-json-ld"
     ],
-    "homepage": "https://github.com/:vendor_slug/:package_slug",
+    "homepage": "https://github.com/bestfitcz/automotive-json-ld",
     "license": "MIT",
     "authors": [
         {
-            "name": ":author_name",
-            "email": "author@domain.com",
+            "name": "David Tomsik",
+            "email": "david.tomsik@bestfit.cz",
             "role": "Developer"
         }
     ],
     "require": {
-        "php": "^8.4",
+        "php": "^8.2",
         "spatie/laravel-package-tools": "^1.16",
         "illuminate/contracts": "^10.0||^11.0||^12.0"
     },
@@ -35,13 +35,13 @@
     },
     "autoload": {
         "psr-4": {
-            "VendorName\\Skeleton\\": "src/",
-            "VendorName\\Skeleton\\Database\\Factories\\": "database/factories/"
+            "Bestfitcz\\AutomotiveJsonLd\\": "src/",
+            "Bestfitcz\\AutomotiveJsonLd\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "VendorName\\Skeleton\\Tests\\": "tests/",
+            "Bestfitcz\\AutomotiveJsonLd\\Tests\\": "tests/",
             "Workbench\\App\\": "workbench/app/"
         }
     },
@@ -63,10 +63,10 @@
     "extra": {
         "laravel": {
             "providers": [
-                "VendorName\\Skeleton\\SkeletonServiceProvider"
+                "Bestfitcz\\AutomotiveJsonLd\\AutomotiveJsonLdServiceProvider"
             ],
             "aliases": {
-                "Skeleton": "VendorName\\Skeleton\\Facades\\Skeleton"
+                "AutomotiveJsonLd": "Bestfitcz\\AutomotiveJsonLd\\Facades\\AutomotiveJsonLd"
             }
         }
     },

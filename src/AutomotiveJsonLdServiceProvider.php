@@ -1,12 +1,12 @@
 <?php
 
-namespace VendorName\Skeleton;
+namespace Bestfitcz\AutomotiveJsonLd;
 
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use VendorName\Skeleton\Commands\SkeletonCommand;
+use Bestfitcz\AutomotiveJsonLd\Commands\AutomotiveJsonLdCommand;
 
-class SkeletonServiceProvider extends PackageServiceProvider
+class AutomotiveJsonLdServiceProvider extends PackageServiceProvider
 {
     public function configurePackage(Package $package): void
     {
@@ -16,10 +16,10 @@ class SkeletonServiceProvider extends PackageServiceProvider
          * More info: https://github.com/spatie/laravel-package-tools
          */
         $package
-            ->name('skeleton')
+            ->name('automotive-json-ld')
             ->hasConfigFile()
             ->hasViews()
-            ->hasMigration('create_migration_table_name_table')
-            ->hasCommand(SkeletonCommand::class);
+            ->hasMigration('create_automotive_json_ld_table')
+            ->hasCommand(AutomotiveJsonLdCommand::class);
     }
 }
