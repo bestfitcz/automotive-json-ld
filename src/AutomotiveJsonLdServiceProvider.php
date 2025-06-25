@@ -2,9 +2,9 @@
 
 namespace Bestfitcz\AutomotiveJsonLd;
 
+use Bestfitcz\AutomotiveJsonLd\Commands\AutomotiveJsonLdCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use Bestfitcz\AutomotiveJsonLd\Commands\AutomotiveJsonLdCommand;
 
 class AutomotiveJsonLdServiceProvider extends PackageServiceProvider
 {

@@ -2,9 +2,9 @@
 
 namespace Bestfitcz\AutomotiveJsonLd\Tests;
 
+use Bestfitcz\AutomotiveJsonLd\AutomotiveJsonLdServiceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Orchestra\Testbench\TestCase as Orchestra;
-use Bestfitcz\AutomotiveJsonLd\AutomotiveJsonLdServiceProvider;
 
 class TestCase extends Orchestra
 {
