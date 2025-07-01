@@ -185,18 +185,19 @@ class AutomotiveJsonLd {
     public function generateDetailPageJsonLd()
     {
         $detailConfig = $this->configuration['page_type']['detail'] ?? [];
-
+        ray($detailConfig);
         if (empty($detailConfig['elements'])) {
             return '';
         }
 
         $objects = [];
         $this->buildObjectsFromConfig($detailConfig['elements'], $objects);
-        //ray($objects);
+        ray($objects);
         // Return the main offer object script
-        if (isset($objects['offer']) && is_object($objects['offer'])) {
+        // TODO: we should mark one of the object in configuration as the main -> will be echoed to a script in the page
+        if (isset($objects['car']) && is_object($objects['car'])) {
             try {
-                return $objects['offer']->toScript();
+                return $objects['car']->toScript();
             } catch (Exception $e) {
                 return '';
             }
@@ -278,6 +279,7 @@ class AutomotiveJsonLd {
             case 'object':
                 // Return reference to already built object
                 $objName = is_array($config['src']) ? $config['src'][0] : $config['src'];
+                //ray($objects,$objName,$config);
                 if (isset($objects[$objName])) {
                     return $objects[$objName];
                 }
