@@ -302,8 +302,20 @@ return [
                             'src' => ['car_offer'],
                         ],
                         'vehicleModelDate' => [
-                            'src_type' => 'str',
-                            'src' => ['2001'],
+                            'src_type' => 'fce',
+                            'src' => [['year']],
+                            'fce_name' => 'getCarVehicleModelDate',
+                            /*
+                            'fce_params' => [
+                                '_conditions' => [
+                                    [
+                                        'property' => 'car_state_id',
+                                        'operator' => '==',
+                                        'value' => '3'
+                                    ]
+                                ]
+                            ]
+                            */
                         ],
 
                     ]

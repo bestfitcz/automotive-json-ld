@@ -355,7 +355,7 @@ class AutomotiveJsonLd {
                 } elseif ($key === 'month') {
                     $result .= sprintf("%02d", $this->car['month']);
                 } elseif ($key === 'day') {
-                    $result .= '01';
+                    $result .= '-01';
                 }
             }
         }
@@ -382,10 +382,23 @@ class AutomotiveJsonLd {
             return null;
         }
 
+        // Check conditions if defined (using reserved key '_conditions')
+        if (isset($params['_conditions']) && is_array($params['_conditions'])) {
+            foreach ($params['_conditions'] as $condition) {
+                if (!$this->evaluateCondition($condition)) {
+                    return null; // Condition not met, don't generate image
+                }
+            }
+        }
+
         $imageObj = new \Spatie\SchemaOrg\ImageObject();
 
-        // Process parameters dynamically
+        // Process parameters dynamically (skip reserved keys starting with '_')
         foreach ($params as $property => $pathExpression) {
+            if (strpos($property, '_') === 0) {
+                continue; // Skip reserved keys like '_conditions'
+            }
+
             $value = $this->extractValueFromPathExpression($image, $pathExpression);
             if ($value !== null) {
                 $imageObj->$property($value);
@@ -399,6 +412,15 @@ class AutomotiveJsonLd {
     {
         if (!is_array($parameterGroups)) {
             return [];
+        }
+
+        // Check conditions if defined (using reserved key '_conditions')
+        if (isset($params['_conditions']) && is_array($params['_conditions'])) {
+            foreach ($params['_conditions'] as $condition) {
+                if (!$this->evaluateCondition($condition)) {
+                    return []; // Condition not met, return empty array
+                }
+            }
         }
 
         $additionalProperties = [];
@@ -456,6 +478,79 @@ class AutomotiveJsonLd {
         $warrantyObj->name($programName);
 
         return $warrantyObj;
+    }
+
+    private function getCarVehicleModelDate($carYear, $params)
+    {
+        if (empty($carYear)) {
+            return null;
+        }
+
+        // Check conditions if defined (using reserved key '_conditions')
+        if (isset($params['_conditions']) && is_array($params['_conditions'])) {
+            foreach ($params['_conditions'] as $condition) {
+                if (!$this->evaluateCondition($condition)) {
+                    return null; // Condition not met, don't generate vehicleModelDate
+                }
+            }
+        }
+
+        $vehicleModelDateStr = $carYear;
+
+        return $vehicleModelDateStr;
+    }
+
+    private function evaluateCondition($condition)
+    {
+        if (!isset($condition['property']) || !isset($condition['operator']) || !isset($condition['value'])) {
+            return true; // Invalid condition, assume true
+        }
+
+        $property = $condition['property'];
+        $operator = $condition['operator'];
+        $expectedValue = $condition['value'];
+
+        // Get the actual value from car data
+        $actualValue = $this->getCarValue([[$property]]);
+        if ($actualValue === null) {
+            return false;
+        }
+
+        // Evaluate the condition based on operator
+        switch ($operator) {
+            case '==':
+            case 'equals':
+                return $actualValue == $expectedValue;
+
+            case '!=':
+            case 'not_equals':
+                return $actualValue != $expectedValue;
+
+            case '>':
+            case 'greater':
+                return $actualValue > $expectedValue;
+
+            case '>=':
+            case 'greater_equals':
+                return $actualValue >= $expectedValue;
+
+            case '<':
+            case 'lower':
+                return $actualValue < $expectedValue;
+
+            case '<=':
+            case 'lower_equals':
+                return $actualValue <= $expectedValue;
+
+            case 'in':
+                return is_array($expectedValue) && in_array($actualValue, $expectedValue);
+
+            case 'not_in':
+                return is_array($expectedValue) && !in_array($actualValue, $expectedValue);
+
+            default:
+                return true; // Unknown operator, assume true
+        }
     }
 
     private function extractValueFromPathExpression($data, $pathExpression)
