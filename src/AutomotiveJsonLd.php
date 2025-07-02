@@ -185,14 +185,14 @@ class AutomotiveJsonLd {
     public function generateDetailPageJsonLd()
     {
         $detailConfig = $this->configuration['page_type']['detail'] ?? [];
-        ray($detailConfig);
+
         if (empty($detailConfig['elements'])) {
             return '';
         }
 
         $objects = [];
         $this->buildObjectsFromConfig($detailConfig['elements'], $objects);
-        ray($objects);
+
         // Return the main offer object script
         // TODO: we should mark one of the object in configuration as the main -> will be echoed to a script in the page
         if (isset($objects['car']) && is_object($objects['car'])) {
