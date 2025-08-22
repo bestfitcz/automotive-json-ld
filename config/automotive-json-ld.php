@@ -2,6 +2,122 @@
 
 // config for Bestfitcz/AutomotiveJsonLd
 return [
+    'breadcrumb' => [
+        'items' => [
+            // Home/root item - always present
+            [
+                'name' => 'Domů',
+                'url' => [
+                    'type' => 'url',
+                    'value' => '/'
+                ]
+            ],
+            // Other page item (for non-car pages like "Výkup vozů")
+            [
+                'name' => [
+                    'type' => 'data',
+                    'path' => ['other_page']
+                ],
+                'condition' => [
+                    'type' => 'isset',
+                    'source' => 'data',
+                    'path' => ['other_page']
+                ]
+            ],
+            // Car type category item (e.g., "Nové vozy", "Certifikované vozy", etc.)
+            [
+                'name' => [
+                    'type' => 'data',
+                    'path' => ['car_type_name']
+                ],
+                'url' => [
+                    'type' => 'data',
+                    'path' => ['car_type_url']
+                ],
+                'condition' => [
+                    'type' => 'isset',
+                    'source' => 'data',
+                    'path' => ['car_type_name']
+                ]
+            ],
+            // Search results - base level for filtered searches
+            [
+                'name' => [
+                    'type' => 'data',
+                    'path' => ['search_results', 'name']
+                ],
+                'url' => [
+                    'type' => 'data',
+                    'path' => ['search_results', 'url']
+                ],
+                'condition' => [
+                    'type' => 'isset',
+                    'source' => 'data',
+                    'path' => ['search_results']
+                ]
+            ],
+            // Manufacturer filter level
+            [
+                'name' => [
+                    'type' => 'data',
+                    'path' => ['manufacturer', 'name']
+                ],
+                'url' => [
+                    'type' => 'data',
+                    'path' => ['manufacturer', 'url']
+                ],
+                'condition' => [
+                    'type' => 'isset',
+                    'source' => 'data',
+                    'path' => ['manufacturer']
+                ]
+            ],
+            // Model filter level
+            [
+                'name' => [
+                    'type' => 'data',
+                    'path' => ['model', 'name']
+                ],
+                'url' => [
+                    'type' => 'data',
+                    'path' => ['model', 'url']
+                ],
+                'condition' => [
+                    'type' => 'isset',
+                    'source' => 'data',
+                    'path' => ['model']
+                ]
+            ],
+            // Body filter level
+            [
+                'name' => [
+                    'type' => 'data',
+                    'path' => ['body', 'name']
+                ],
+                'url' => [
+                    'type' => 'data',
+                    'path' => ['body', 'url']
+                ],
+                'condition' => [
+                    'type' => 'isset',
+                    'source' => 'data',
+                    'path' => ['body']
+                ]
+            ],
+            // Detail page - final level for car detail pages (no URL)
+            [
+                'name' => [
+                    'type' => 'data',
+                    'path' => ['detail', 'name']
+                ],
+                'condition' => [
+                    'type' => 'isset',
+                    'source' => 'data',
+                    'path' => ['detail']
+                ]
+            ]
+        ]
+    ],
     'page_type' => [
         'detail' => [
             'elements' => [

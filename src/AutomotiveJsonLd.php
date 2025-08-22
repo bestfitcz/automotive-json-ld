@@ -575,4 +575,451 @@ class AutomotiveJsonLd {
         return $value;
     }
 
+    public function generatePageBreadcrumbList($requestData = [])
+    {
+        // Build breadcrumb data internally based on request and car data
+        $breadcrumbData = $this->buildBreadcrumbData($requestData);
+
+        $breadcrumbConfig = $this->configuration['breadcrumb'] ?? [];
+
+        if (empty($breadcrumbConfig)) {
+            return '';
+        }
+
+        // Build breadcrumb list
+        $breadcrumbList = new \Spatie\SchemaOrg\BreadcrumbList();
+        $listItems = [];
+
+        // Process breadcrumb items from config
+        if (isset($breadcrumbConfig['items']) && is_array($breadcrumbConfig['items'])) {
+            $position = 1;
+            foreach ($breadcrumbConfig['items'] as $itemConfig) {
+                // Check if item should be included based on conditions
+                if (isset($itemConfig['condition'])) {
+                    if (!$this->evaluateBreadcrumbCondition($itemConfig['condition'], $breadcrumbData)) {
+                        continue;
+                    }
+                }
+
+                $listItem = new \Spatie\SchemaOrg\ListItem();
+                $listItem->position($position);
+
+                // Set name
+                if (isset($itemConfig['name'])) {
+                    $name = $this->getBreadcrumbValue($itemConfig['name'], $breadcrumbData);
+                    if ($name) {
+                        $listItem->name($name);
+                    }
+                }
+
+                // Set URL
+                if (isset($itemConfig['url'])) {
+                    $url = $this->getBreadcrumbValue($itemConfig['url'], $breadcrumbData);
+                    if ($url) {
+                        $listItem->item($url);
+                    }
+                }
+
+                $listItems[] = $listItem;
+                $position++;
+            }
+        }
+
+        if (!empty($listItems)) {
+            $breadcrumbList->itemListElement($listItems);
+            return $breadcrumbList->toScript();
+        }
+
+        return '';
+    }
+
+    private function getBreadcrumbValue($config, $breadcrumbData)
+    {
+        if (is_string($config)) {
+            return $config;
+        }
+
+        if (!is_array($config) || !isset($config['type'])) {
+            return null;
+        }
+
+        switch ($config['type']) {
+            case 'static':
+                return $config['value'] ?? '';
+
+            case 'car':
+                if (isset($config['path'])) {
+                    return $this->getCarValue([$config['path']]);
+                }
+                break;
+
+            case 'data':
+                if (isset($config['path']) && is_array($config['path'])) {
+                    return $this->extractValueFromData($breadcrumbData, $config['path']);
+                }
+                break;
+
+            case 'url':
+                if (isset($config['value'])) {
+                    return $this->makeUrl($config['value']);
+                }
+                break;
+        }
+
+        return null;
+    }
+
+    private function extractValueFromData($data, $path)
+    {
+        $value = $data;
+        foreach ($path as $key) {
+            if (isset($value[$key])) {
+                $value = $value[$key];
+            } else {
+                return null;
+            }
+        }
+        return $value;
+    }
+
+    private function evaluateBreadcrumbCondition($condition, $breadcrumbData)
+    {
+        if (!isset($condition['type'])) {
+            return true;
+        }
+
+        switch ($condition['type']) {
+            case 'isset':
+                if (isset($condition['path'])) {
+                    if ($condition['source'] === 'car') {
+                        return $this->getCarValue([$condition['path']]) !== null;
+                    } elseif ($condition['source'] === 'data') {
+                        return $this->extractValueFromData($breadcrumbData, $condition['path']) !== null;
+                    }
+                }
+                break;
+
+            case 'equals':
+                if (isset($condition['path']) && isset($condition['value'])) {
+                    $actualValue = null;
+                    if ($condition['source'] === 'car') {
+                        $actualValue = $this->getCarValue([$condition['path']]);
+                    } elseif ($condition['source'] === 'data') {
+                        $actualValue = $this->extractValueFromData($breadcrumbData, $condition['path']);
+                    }
+                    return $actualValue == $condition['value'];
+                }
+                break;
+        }
+
+        return true;
+    }
+
+    private function buildBreadcrumbData($requestData = [])
+    {
+        $breadcrumbData = [];
+
+        // Extract data from request
+        $routeName = $requestData['route_name'] ?? '';
+        $routeParameters = $requestData['route_parameters'] ?? [];
+        $queryParameters = $requestData['query_parameters'] ?? [];
+        $currentUrl = $requestData['current_url'] ?? '';
+        $segment1 = $requestData['segment1'] ?? '';
+        $pagetype = $requestData['pagetype'] ?? '';
+
+        // Detect page type and build breadcrumb structure
+        $isHomePage = empty($segment1) || $segment1 === '' || $currentUrl === $this->makeUrl('/');
+        $isCarTypePage = in_array($segment1, ['nove-vozy', 'certifikovane-vozy', 'ojete-vozy', 'skladove-vozy']);
+        $isListPage = str_contains($routeName, 'list') || str_contains($currentUrl, 'vysledky-hledani');
+        $isDetailPage = str_contains($routeName, 'detail') || (!empty($this->car) && isset($this->car['url_detail']));
+        $isOtherPage = !$isHomePage && !$isCarTypePage && !$isListPage && !$isDetailPage;
+
+        // Build breadcrumb structure based on page type and query parameters
+        if ($isHomePage) {
+            // Home page: Just "Domů"
+            $breadcrumbData['home_only'] = true;
+        } elseif ($isOtherPage) {
+            // Other pages like "Výkup vozů": Home > Page name
+            $breadcrumbData['other_page'] = $this->getPageNameFromUrl($segment1, $currentUrl);
+        } elseif ($isCarTypePage || $isListPage || $isDetailPage) {
+            // Car-related pages: Progressive breadcrumb structure
+
+            // Determine car type information
+            $carTypeInfo = $this->getCarTypeInfo($pagetype, $segment1);
+            $breadcrumbData['car_type_name'] = $carTypeInfo['name'];
+            $breadcrumbData['car_type_url'] = $carTypeInfo['url'];
+            $breadcrumbData['car_type_slug'] = $carTypeInfo['slug'];
+
+            if ($isCarTypePage && empty($queryParameters) && !$isListPage && !$isDetailPage) {
+                // Just category homepage: Home > Category (no search results level)
+                // The car type info is already set above, no additional breadcrumbs needed
+            } else {
+                // Build progressive search breadcrumbs
+                $this->buildProgressiveBreadcrumbs($breadcrumbData, $queryParameters, $routeParameters, $carTypeInfo, $isDetailPage);
+            }
+        }
+
+        return $breadcrumbData;
+    }
+
+    private function getCarTypeInfo($pagetype, $segment1)
+    {
+        // Map pagetype or URL segment to car type info
+        $carTypes = [
+            'stockcars' => ['name' => 'Nové vozy', 'slug' => 'nove-vozy'],
+            'certifiedcars' => ['name' => 'Certifikované vozy', 'slug' => 'certifikovane-vozy'],
+            'usedcars' => ['name' => 'Ojeté vozy', 'slug' => 'ojete-vozy']
+        ];
+
+        // Try pagetype first
+        if (!empty($pagetype) && isset($carTypes[$pagetype])) {
+            $info = $carTypes[$pagetype];
+        } else {
+            // Fallback to URL segment
+            $urlToPagetype = [
+                'nove-vozy' => 'stockcars',
+                'skladove-vozy' => 'stockcars',
+                'certifikovane-vozy' => 'certifiedcars',
+                'ojete-vozy' => 'usedcars'
+            ];
+
+            $pagetypeFromUrl = $urlToPagetype[$segment1] ?? 'stockcars';
+            $info = $carTypes[$pagetypeFromUrl];
+        }
+
+        return [
+            'name' => $info['name'],
+            'slug' => $info['slug'],
+            'url' => $this->makeUrl('/' . $info['slug'])
+        ];
+    }
+
+    private function getPageNameFromUrl($segment1, $currentUrl)
+    {
+        // Map common page URLs to names
+        $pageNames = [
+            'vykup-vozu' => 'Výkup vozů',
+            'financovani' => 'Financování',
+            'pojisteni' => 'Pojištění',
+            'servis' => 'Servis'
+        ];
+
+        return $pageNames[$segment1] ?? ucfirst($segment1);
+    }
+
+    private function buildProgressiveBreadcrumbs(&$breadcrumbData, $queryParameters, $routeParameters, $carTypeInfo, $isDetailPage)
+    {
+        // Base search results item
+        $breadcrumbData['search_results'] = [
+            'name' => $carTypeInfo['name'] . ' - Výsledky hledání',
+            'url' => $this->buildListUrl($this->getPagetypeFromCarType($carTypeInfo['slug']), [])
+        ];
+
+        // Extract filter hierarchy from query parameters or route parameters for detail pages
+        $manufacturerFilter = $this->extractQueryParam($queryParameters, 'manufacturer');
+        $modelFilter = $this->extractQueryParam($queryParameters, 'model');
+        $bodyFilter = $this->extractQueryParam($queryParameters, 'body');
+
+        // For detail pages, extract from route parameters if not found in query parameters
+        if ($isDetailPage && (empty($manufacturerFilter) || empty($modelFilter) || empty($bodyFilter))) {
+            $routeParams = $this->extractDetailPageRouteParams($routeParameters);
+            if ($routeParams) {
+                $manufacturerFilter = $manufacturerFilter ?: $routeParams['manufacturer'];
+                $modelFilter = $modelFilter ?: $routeParams['model'];
+                $bodyFilter = $bodyFilter ?: $routeParams['body'];
+            }
+        }
+
+        // Build progressive filter levels
+        if (!empty($manufacturerFilter)) {
+            $manufacturerName = $this->getFilterDisplayName('manufacturer', $manufacturerFilter);
+            if ($manufacturerName) {
+                $breadcrumbData['manufacturer'] = [
+                    'name' => $carTypeInfo['name'] . ' - Výsledky hledání - ' . $manufacturerName,
+                    'url' => $this->buildListUrl($this->getPagetypeFromCarType($carTypeInfo['slug']), [
+                        'manufacturer' => [$manufacturerFilter]
+                    ])
+                ];
+
+                if (!empty($modelFilter)) {
+                    $modelName = $this->getFilterDisplayName('model', $modelFilter);
+                    if ($modelName) {
+                        $breadcrumbData['model'] = [
+                            'name' => $carTypeInfo['name'] . ' - Výsledky hledání - ' . $manufacturerName . ' - ' . $modelName,
+                            'url' => $this->buildListUrl($this->getPagetypeFromCarType($carTypeInfo['slug']), [
+                                'manufacturer' => [$manufacturerFilter],
+                                'model' => [$modelFilter]
+                            ])
+                        ];
+
+                        if (!empty($bodyFilter)) {
+                            $bodyName = $this->getFilterDisplayName('body', $bodyFilter);
+                            if ($bodyName) {
+                                $breadcrumbData['body'] = [
+                                    'name' => $carTypeInfo['name'] . ' - Výsledky hledání - ' . $manufacturerName . ' - ' . $modelName . ' - ' . $bodyName,
+                                    'url' => $this->buildListUrl($this->getPagetypeFromCarType($carTypeInfo['slug']), [
+                                        'manufacturer' => [$manufacturerFilter],
+                                        'model' => [$modelFilter],
+                                        'body' => [$bodyFilter]
+                                    ])
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Detail page final item (no URL for current page)
+        if ($isDetailPage) {
+            $detailTitle = $carTypeInfo['name'] . ' - Detail vozu';
+            if (!empty($this->car['full_title'])) {
+                $detailTitle .= ' - ' . $this->car['full_title'];
+            }
+            $breadcrumbData['detail'] = [
+                'name' => $detailTitle,
+                'url' => null
+            ];
+        }
+    }
+
+    private function extractQueryParam($queryParameters, $paramName)
+    {
+        if (empty($queryParameters[$paramName])) {
+            return null;
+        }
+
+        $param = $queryParameters[$paramName];
+
+        // Handle array format like manufacturer[0]=citroen
+        if (is_array($param)) {
+            return !empty($param[0]) ? $param[0] : null;
+        }
+
+        return $param;
+    }
+
+    private function extractDetailPageRouteParams($routeParameters)
+    {
+        // Extract manufacturer, model, and body from detail page route parameters
+        // Detail page URL pattern: /{car-type}/detail-vozu/{manufacturer}/{model}/{body}/{version}/{id}
+
+        $extracted = [
+            'manufacturer' => null,
+            'model' => null,
+            'body' => null
+        ];
+
+        // Check if we have the expected route parameters
+        if (isset($routeParameters['manufacturer'])) {
+            $extracted['manufacturer'] = $routeParameters['manufacturer'];
+        }
+
+        if (isset($routeParameters['model'])) {
+            $extracted['model'] = $routeParameters['model'];
+        }
+
+        if (isset($routeParameters['body'])) {
+            $extracted['body'] = $routeParameters['body'];
+        }
+
+        // If any values are found, return the array, otherwise null
+        if ($extracted['manufacturer'] || $extracted['model'] || $extracted['body']) {
+            return $extracted;
+        }
+
+        return null;
+    }
+
+    private function getFilterDisplayName($filterType, $filterValue)
+    {
+        // Try to get display name from car data first
+        if (!empty($this->car)) {
+            switch ($filterType) {
+                case 'manufacturer':
+                    if (isset($this->car['manufacturer']['name']) &&
+                        strtolower($this->car['manufacturer']['slug']) === strtolower($filterValue)) {
+                        return $this->car['manufacturer']['name'];
+                    }
+                    break;
+                case 'model':
+                    if (isset($this->car['model']['name']) &&
+                        strtolower($this->car['model']['slug']) === strtolower($filterValue)) {
+                        return $this->car['model']['name'];
+                    }
+                    break;
+                case 'body':
+                    if (isset($this->car['body']['name']) &&
+                        strtolower($this->car['body']['slug']) === strtolower($filterValue)) {
+                        return $this->car['body']['name'];
+                    }
+                    break;
+            }
+        }
+
+        // Fallback to capitalize the slug
+        return ucfirst(str_replace('-', ' ', $filterValue));
+    }
+
+    private function getPagetypeFromCarType($carTypeSlug)
+    {
+        $slugToPagetype = [
+            'nove-vozy' => 'stockcars',
+            'certifikovane-vozy' => 'certifiedcars',
+            'ojete-vozy' => 'usedcars'
+        ];
+
+        return $slugToPagetype[$carTypeSlug] ?? 'stockcars';
+    }
+
+    private function buildListUrl($routePrefix, $params = [])
+    {
+        // Map route prefix to actual route name
+        $routeMap = [
+            'stockcars' => 'stockcars.list',
+            'certifiedcars' => 'certifiedcars.list',
+            'usedcars' => 'usedcars.list'
+        ];
+
+        $routeName = $routeMap[$routePrefix] ?? 'stockcars.list';
+
+        // Check if route exists
+        if (app('router')->has($routeName)) {
+            return route($routeName, $params);
+        }
+
+        // Fallback to URL construction
+        $urlMap = [
+            'stockcars' => '/nove-vozy/vysledky-hledani',
+            'certifiedcars' => '/certifikovane-vozy/vysledky-hledani',
+            'usedcars' => '/ojete-vozy/vysledky-hledani'
+        ];
+
+        $baseUrl = $urlMap[$routePrefix] ?? '/nove-vozy/vysledky-hledani';
+
+        if (!empty($params)) {
+            $queryString = http_build_query($params);
+            return $this->makeUrl($baseUrl . '?' . $queryString);
+        }
+
+        return $this->makeUrl($baseUrl);
+    }
+
+    private function makeUrl($path)
+    {
+        // Check if Laravel's url helper is available
+        if (function_exists('url')) {
+            return url($path);
+        }
+
+        // Fallback to simple URL construction
+        // This is for testing or when Laravel app is not fully bootstrapped
+        if (strpos($path, 'http') === 0) {
+            return $path;
+        }
+
+        // Assume we're constructing a relative URL
+        return $path;
+    }
+
 }
