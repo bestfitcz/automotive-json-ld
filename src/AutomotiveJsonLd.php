@@ -1022,4 +1022,213 @@ class AutomotiveJsonLd {
         return $path;
     }
 
+    /**
+     * Generate ItemList JSON-LD for car listing pages
+     *
+     * @param array $cars Array of car objects from listing page
+     * @return string JSON-LD script tag or empty string
+     */
+    public function generateCarList(array $cars)
+    {
+        if (empty($cars)) {
+            return '';
+        }
+
+        try {
+            // Create ItemList schema
+            $itemList = new \Spatie\SchemaOrg\ItemList();
+            $itemList->itemListOrder('https://schema.org/ItemListOrderAscending');
+            $itemList->numberOfItems(count($cars));
+
+            $listItems = [];
+            $position = 1;
+
+            foreach ($cars as $carData) {
+                // Convert car data to array if it's an object
+                if (is_object($carData)) {
+                    $carData = (array) $carData;
+                }
+
+                // Create ListItem
+                $listItem = new \Spatie\SchemaOrg\ListItem();
+                $listItem->position($position);
+
+                // Create simplified Car object
+                $car = $this->createSimplifiedCarObject($carData);
+                if ($car) {
+                    $listItem->item($car);
+                    $listItems[] = $listItem;
+                }
+
+                $position++;
+            }
+
+            if (!empty($listItems)) {
+                $itemList->itemListElement($listItems);
+                return $itemList->toScript();
+            }
+        } catch (\Exception $e) {
+            // Silently fail and return empty string
+            return '';
+        }
+
+        return '';
+    }
+
+    /**
+     * Create simplified Car object for listing pages
+     *
+     * @param array $carData Single car data from listing
+     * @return \Spatie\SchemaOrg\Car|null
+     */
+    private function createSimplifiedCarObject(array $carData)
+    {
+        try {
+            $car = new \Spatie\SchemaOrg\Car();
+
+            // Basic car information
+            if (!empty($carData['manufacturer']['name']) && !empty($carData['model']['name'])) {
+                $car->name($carData['manufacturer']['name'] . ' ' . $carData['model']['name']);
+                $car->manufacturer($carData['manufacturer']['name']);
+                $car->model($carData['model']['name']);
+
+                // Add brand (required by Google)
+                $brand = new \Spatie\SchemaOrg\Brand();
+                $brand->name($carData['manufacturer']['name']);
+                $car->brand($brand);
+            }
+
+            // Add version as description if available
+            if (!empty($carData['version'])) {
+                $car->description($carData['version']);
+            }
+
+            // Vehicle specifications - mileageFromOdometer with QuantitativeValue (required by Google)
+            if (!empty($carData['kilometers'])) {
+                $mileage = new \Spatie\SchemaOrg\QuantitativeValue();
+                $mileage->value($carData['kilometers']);
+                $mileage->unitCode('KMT'); // UN/CEFACT code for kilometers
+                $car->mileageFromOdometer($mileage);
+            }
+
+            // Add vehicleModelDate (required by Google)
+            if (!empty($carData['year'])) {
+                $car->vehicleModelDate((string)$carData['year']);
+
+                // Also keep dateVehicleFirstRegistered if month is available
+                if (!empty($carData['month'])) {
+                    $yearMonth = $carData['year'] . '-' . sprintf("%02d", $carData['month']) . '-01';
+                    $car->dateVehicleFirstRegistered($yearMonth);
+                } else {
+                    $car->dateVehicleFirstRegistered((string)$carData['year']);
+                }
+            }
+
+            // Add VIN (Vehicle Identification Number) if available
+            if (!empty($carData['vin'])) {
+                $car->vehicleIdentificationNumber($carData['vin']);
+            }
+
+            if (!empty($carData['fuel']['name'])) {
+                $car->fuelType($carData['fuel']['name']);
+            }
+
+            if (!empty($carData['transmission']['name'])) {
+                $car->vehicleTransmission($carData['transmission']['name']);
+            }
+
+            // Car condition
+            $carStateId = $carData['car_state_id'] ?? $carData['car_state']['id'] ?? null;
+            if ($carStateId) {
+                $condition = $this->getCarStageCondition($carStateId, []);
+                if ($condition) {
+                    $car->itemCondition($condition);
+                }
+            }
+
+            // Image
+            if (!empty($carData['image_thumbnail_list'])) {
+                $car->image($carData['image_thumbnail_list']);
+            } elseif (!empty($carData['images'][0]['url']['515_387'])) {
+                $car->image($carData['images'][0]['url']['515_387']);
+            }
+
+            // URL to detail page
+            if (!empty($carData['url_detail'])) {
+                $car->url($carData['url_detail']);
+            }
+
+            // Create Offer with price and seller
+            $offer = new \Spatie\SchemaOrg\Offer();
+
+            if (!empty($carData['price'])) {
+                $offer->price($carData['price']);
+                $offer->priceCurrency('CZK');
+            }
+
+            $offer->availability('https://schema.org/InStock');
+
+            if (!empty($carData['url_detail'])) {
+                $offer->url($carData['url_detail']);
+            }
+
+            // Add dealer as seller
+            if (!empty($carData['dealer'])) {
+                $dealer = $this->createSimplifiedDealerObject($carData['dealer']);
+                if ($dealer) {
+                    $offer->seller($dealer);
+                }
+            }
+
+            $car->offers($offer);
+
+            return $car;
+
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Create simplified AutoDealer object for listing pages
+     *
+     * @param array $dealerData Dealer information
+     * @return \Spatie\SchemaOrg\AutoDealer|null
+     */
+    private function createSimplifiedDealerObject(array $dealerData)
+    {
+        try {
+            $dealer = new \Spatie\SchemaOrg\AutoDealer();
+
+            if (!empty($dealerData['name'])) {
+                $dealer->name($dealerData['name']);
+            }
+
+            // Create postal address
+            if (!empty($dealerData['street']) || !empty($dealerData['city'])) {
+                $address = new \Spatie\SchemaOrg\PostalAddress();
+
+                if (!empty($dealerData['street'])) {
+                    $address->streetAddress($dealerData['street']);
+                }
+
+                if (!empty($dealerData['city'])) {
+                    $address->addressLocality($dealerData['city']);
+                }
+
+                if (!empty($dealerData['zip'])) {
+                    $address->postalCode($dealerData['zip']);
+                }
+
+                $address->addressCountry('CZ');
+                $dealer->address($address);
+            }
+
+            return $dealer;
+
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
 }
