@@ -4,6 +4,7 @@ namespace Bestfitcz\AutomotiveJsonLd;
 
 use App\Models\Car;
 use Exception;
+use Illuminate\Http\Request;
 
 class AutomotiveJsonLd {
     public array $car;
@@ -575,8 +576,17 @@ class AutomotiveJsonLd {
         return $value;
     }
 
-    public function generatePageBreadcrumbList($requestData = [])
+    public function generatePageBreadcrumbList($pagetype = null)
     {
+        $requestData = [
+            'route_name' => request()->route() ? request()->route()->getName() : '',
+            'route_parameters' => request()->route() ? request()->route()->parameters() : [],
+            'query_parameters' => request()->query(),
+            'current_url' => request()->url(),
+            'segment1' => request()->segment(1),
+            'pagetype' => $pagetype ?? null
+        ];
+
         // Build breadcrumb data internally based on request and car data
         $breadcrumbData = $this->buildBreadcrumbData($requestData);
 
@@ -1030,7 +1040,10 @@ class AutomotiveJsonLd {
      */
     public function generateCarList(array $cars)
     {
-        if (empty($cars)) {
+        if (empty($cars) ||
+            !request()->is($this->configuration['page_type']['car_list']['generate_conditions']['url_patern']) ||
+            !in_array(request()->segment(1), $this->configuration['page_type']['car_list']['generate_conditions']['url_segments'])
+        ) {
             return '';
         }
 

@@ -440,6 +440,12 @@ return [
 
             ]
         ],
+        'car_list' => [
+            'generate_conditions' => [
+                'url_patern' => '*/vysledky-hledani',
+                'url_segments' => ['nove-vozy', 'skladove-vozy', 'certifikovane-vozy', 'ojete-vozy']
+            ]
+        ],
         'test' => [
             'elements' => [
                 'dealer_postal_address' => [
