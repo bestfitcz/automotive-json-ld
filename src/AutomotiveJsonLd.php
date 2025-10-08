@@ -198,12 +198,43 @@ class AutomotiveJsonLd {
         // TODO: we should mark one of the object in configuration as the main -> will be echoed to a script in the page
         if (isset($objects['car']) && is_object($objects['car'])) {
             try {
-                return $objects['car']->toScript();
+                $script = $objects['car']->toScript();
+
+                // Check if this should be multi-type and fix it
+                if (isset($detailConfig['elements']['car']['multi_type']) && is_array($detailConfig['elements']['car']['multi_type'])) {
+                    $script = $this->fixMultiTypeInScript($script, $detailConfig['elements']['car']['multi_type']);
+                }
+
+                return $script;
             } catch (Exception $e) {
                 return '';
             }
         }
         return '';
+    }
+
+    /**
+     * Fix multi-type in generated script (workaround for Spatie Schema.org limitation)
+     *
+     * @param string $script
+     * @param array $types
+     * @return string
+     */
+    private function fixMultiTypeInScript($script, $types)
+    {
+        // Extract JSON from script tag
+        if (preg_match('/<script type="application\/ld\+json">(.*?)<\/script>/s', $script, $matches)) {
+            $json = $matches[1];
+            $data = json_decode($json, true);
+
+            if ($data && isset($data['@type'])) {
+                $data['@type'] = $types;
+                $newJson = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                return '<script type="application/ld+json">' . $newJson . '</script>';
+            }
+        }
+
+        return $script;
     }
 
     private function buildObjectsFromConfig($elements, &$objects)
@@ -220,20 +251,38 @@ class AutomotiveJsonLd {
             }
 
             $objects[$elementName] = new $schemaClass();
+
+            // Note: multi-type handling is done in generateDetailPageJsonLd() via fixMultiTypeInScript()
         }
 
         // Second pass: populate objects (so object references work)
         foreach ($elements as $elementName => $elementConfig) {
-            if (isset($objects[$elementName]) && isset($elementConfig['elements'])) {
-                $result = $this->populateObjectFromConfig($objects[$elementName], $elementConfig['elements'], $objects);
+            if (isset($elementConfig['elements'])) {
+                // Handle direct function calls without schema object
+                if (!isset($elementConfig['schema']) &&
+                    isset($elementConfig['elements']['src_type']) &&
+                    $elementConfig['elements']['src_type'] === 'fce') {
 
-                // If the result is a direct value (from function call), replace the object
-                if ($result !== null) {
-                    $objects[$elementName] = $result;
+                    // Call function directly without creating an object first
+                    $value = $this->getValueFromConfig($elementConfig['elements'], $objects);
+                    if ($value !== null) {
+                        $objects[$elementName] = $value;
+                    }
+                    continue;
                 }
-                // If it's a function call that returned null, remove the object
-                elseif (isset($elementConfig['elements']['src_type']) && $elementConfig['elements']['src_type'] === 'fce') {
-                    unset($objects[$elementName]);
+
+                // Handle normal objects
+                if (isset($objects[$elementName])) {
+                    $result = $this->populateObjectFromConfig($objects[$elementName], $elementConfig['elements'], $objects);
+
+                    // If the result is a direct value (from function call), replace the object
+                    if ($result !== null) {
+                        $objects[$elementName] = $result;
+                    }
+                    // If it's a function call that returned null, remove the object
+                    elseif (isset($elementConfig['elements']['src_type']) && $elementConfig['elements']['src_type'] === 'fce') {
+                        unset($objects[$elementName]);
+                    }
                 }
             }
         }
@@ -451,6 +500,20 @@ class AutomotiveJsonLd {
         $priceSpecObj->price($priceWithoutVat);
         $priceSpecObj->priceCurrency('CZK');
         $priceSpecObj->valueAddedTaxIncluded(false);
+
+        return $priceSpecObj;
+    }
+
+    private function getCarPriceSpecificationWithVat($priceWithVat, $params)
+    {
+        if (empty($priceWithVat)) {
+            return null;
+        }
+
+        $priceSpecObj = new \Spatie\SchemaOrg\PriceSpecification();
+        $priceSpecObj->price($priceWithVat);
+        $priceSpecObj->priceCurrency('CZK');
+        $priceSpecObj->valueAddedTaxIncluded(true);  // Important for Czech B2C market
 
         return $priceSpecObj;
     }
@@ -1078,7 +1141,12 @@ class AutomotiveJsonLd {
 
             if (!empty($listItems)) {
                 $itemList->itemListElement($listItems);
-                return $itemList->toScript();
+                $script = $itemList->toScript();
+
+                // Fix multi-type for all Car items in the list
+                $script = $this->fixMultiTypeInItemList($script);
+
+                return $script;
             }
         } catch (\Exception $e) {
             // Silently fail and return empty string
@@ -1089,15 +1157,46 @@ class AutomotiveJsonLd {
     }
 
     /**
-     * Create simplified Car object for listing pages
+     * Fix multi-type for all items in ItemList (workaround for Spatie Schema.org limitation)
+     *
+     * @param string $script
+     * @return string
+     */
+    private function fixMultiTypeInItemList($script)
+    {
+        // Extract JSON from script tag
+        if (preg_match('/<script type="application\/ld\+json">(.*?)<\/script>/s', $script, $matches)) {
+            $json = $matches[1];
+            $data = json_decode($json, true);
+
+            if ($data && isset($data['itemListElement']) && is_array($data['itemListElement'])) {
+                // Fix @type for each item that has Product type
+                foreach ($data['itemListElement'] as &$listItem) {
+                    if (isset($listItem['item']['@type']) && $listItem['item']['@type'] === 'Product') {
+                        $listItem['item']['@type'] = ['Product', 'Car'];
+                    }
+                }
+                unset($listItem); // Break reference
+
+                $newJson = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                return '<script type="application/ld+json">' . $newJson . '</script>';
+            }
+        }
+
+        return $script;
+    }
+
+    /**
+     * Create simplified Product+Car object for listing pages
      *
      * @param array $carData Single car data from listing
-     * @return \Spatie\SchemaOrg\Car|null
+     * @return \Spatie\SchemaOrg\Product|null
      */
     private function createSimplifiedCarObject(array $carData)
     {
         try {
-            $car = new \Spatie\SchemaOrg\Car();
+            // Create Product schema (multi-type will be set when converting to array)
+            $car = new \Spatie\SchemaOrg\Product();
 
             // Basic car information
             if (!empty($carData['manufacturer']['name']) && !empty($carData['model']['name'])) {
@@ -1109,6 +1208,14 @@ class AutomotiveJsonLd {
                 $brand = new \Spatie\SchemaOrg\Brand();
                 $brand->name($carData['manufacturer']['name']);
                 $car->brand($brand);
+            }
+
+            // Add SKU/MPN (required for Product schema)
+            if (!empty($carData['vin'])) {
+                $car->sku($carData['vin']);
+                $car->mpn($carData['vin']);
+            } elseif (!empty($carData['id'])) {
+                $car->sku($carData['id']);
             }
 
             // Add version as description if available
@@ -1177,12 +1284,27 @@ class AutomotiveJsonLd {
             if (!empty($carData['price'])) {
                 $offer->price($carData['price']);
                 $offer->priceCurrency('CZK');
+
+                // Add price specification with VAT included (required for Czech B2C)
+                $priceSpec = new \Spatie\SchemaOrg\PriceSpecification();
+                $priceSpec->price($carData['price']);
+                $priceSpec->priceCurrency('CZK');
+                $priceSpec->valueAddedTaxIncluded(true);
+                $offer->priceSpecification($priceSpec);
             }
 
             $offer->availability('https://schema.org/InStock');
 
             if (!empty($carData['url_detail'])) {
                 $offer->url($carData['url_detail']);
+            }
+
+            // Add item condition to Offer (same as Product/Car)
+            if ($carStateId) {
+                $condition = $this->getCarStageCondition($carStateId, []);
+                if ($condition) {
+                    $offer->itemCondition($condition);
+                }
             }
 
             // Add dealer as seller

@@ -265,6 +265,14 @@ return [
                         'fce_name' => 'getCarPriceSpecificationWithoutVat',
                     ],
                 ],
+                'price_with_VAT' => [
+                    'schema' => '\Spatie\SchemaOrg\PriceSpecification()',
+                    'elements' => [
+                        'src_type' => 'fce',
+                        'src' => [['price']],
+                        'fce_name' => 'getCarPriceSpecificationWithVat',
+                    ],
+                ],
                 'car_program_warranty' => [
                     'schema' => '\Spatie\SchemaOrg\WarrantyPromise()',
                     'elements' => [
@@ -274,7 +282,6 @@ return [
                     ],
                 ],
                 'item_condition' => [
-                    'schema' => '\Spatie\SchemaOrg\PriceSpecification()',
                     'elements' => [
                         'src_type' => 'fce',
                         'src' => [['car_state_id']],
@@ -284,12 +291,10 @@ return [
                 'car_offer' => [
                     'schema' => '\Spatie\SchemaOrg\Offer()',
                     'elements' => [
-                        /*
-                        'offeredBy' => [
+                        'seller' => [
                             'src_type' => 'object',
                             'src' => ['dealer'],
                         ],
-                        */
                         'priceCurrency' => [
                             'src_type' => 'str',
                             'src' => ['CZK'],
@@ -300,7 +305,7 @@ return [
                         ],
                         'priceSpecification' => [
                             'src_type' => 'object',
-                            'src' => ['price_without_VAT'],
+                            'src' => ['price_with_VAT'],  // Use price WITH VAT for Czech B2C
                         ],
                         'itemCondition' => [
                             'src_type' => 'object',
@@ -335,7 +340,8 @@ return [
                 ],
 
                 'car' => [
-                    'schema' => '\Spatie\SchemaOrg\Car()',
+                    'schema' => '\Spatie\SchemaOrg\Product()',
+                    'multi_type' => ['Product', 'Car'],  // Google requires combined type
                     'elements' => [
                         'brand' => [
                             'src_type' => 'object',
@@ -356,6 +362,17 @@ return [
                         'description' => [
                             'src_type' => 'car',
                             'src' => [['description']],
+                        ],
+                        'sku' => [
+                            'src_type' => 'car',
+                            'src' => [
+                                ['vin'],  // Try VIN first
+                                ['id']    // Fallback to car ID
+                            ],
+                        ],
+                        'mpn' => [
+                            'src_type' => 'car',
+                            'src' => [['vin']],
                         ],
                         'itemCondition' => [
                             'src_type' => 'object',
@@ -653,7 +670,6 @@ return [
                     ],
                 ],
                 'item_condition' => [
-                    'schema' => '\Spatie\SchemaOrg\PriceSpecification()',
                     'elements' => [
                         'src_type' => 'fce',
                         'src' => [['car_state_id']],
